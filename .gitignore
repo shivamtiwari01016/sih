@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+node_modules/
+dist/
+uploads/
+postgres_data/
+.DS_Store
+*.log
+*.db
+.pytest_cache/
