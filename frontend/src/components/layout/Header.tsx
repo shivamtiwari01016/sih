@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Bell, Globe, LogOut } from 'lucide-react'
+import { Bell, Globe, LogOut, Sparkles } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { useAuth } from '../../context/AuthContext'
 import { useLanguage } from '../../context/LanguageContext'
 import { Badge } from '../ui'
+import DailyBriefingModal from '../DailyBriefingModal'
 
 export default function Header() {
   const navigate = useNavigate()
@@ -12,6 +13,7 @@ export default function Header() {
   const { user, logout } = useAuth()
   const { lang, setLang, t } = useLanguage()
   const [unread, setUnread] = useState(0)
+  const [briefingOpen, setBriefingOpen] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -81,6 +83,17 @@ export default function Header() {
           {t('demo.badge')}
         </Badge>
 
+        {/* Daily Briefing button */}
+        <button
+          type="button"
+          onClick={() => setBriefingOpen(true)}
+          className="flex items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition-colors"
+          title="Daily 60-Second Briefing"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+          <span className="hidden sm:inline">Daily Briefing</span>
+        </button>
+
         <button
           type="button"
           onClick={() => navigate('/notifications')}
@@ -113,6 +126,11 @@ export default function Header() {
           <span className="hidden md:inline">Sign out</span>
         </button>
       </div>
+
+      <DailyBriefingModal
+        open={briefingOpen}
+        onClose={() => setBriefingOpen(false)}
+      />
     </header>
   )
 }

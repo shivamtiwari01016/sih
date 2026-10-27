@@ -80,12 +80,12 @@ docker-compose exec backend alembic upgrade head
 
 | Role | Email | Password |
 |------|-------|----------|
-| Super Admin | admin@civicresolve.demo | DemoPass123! |
-| Bureau Admin (Regulation) | regadmin@civicresolve.demo | DemoPass123! |
-| Bureau Admin (PGRC) | pgrcadmin@civicresolve.demo | DemoPass123! |
-| Case Officer | officer1@civicresolve.demo | DemoPass123! |
-| Regional Officer | regional@civicresolve.demo | DemoPass123! |
-| Senior Management | mgmt@civicresolve.demo | DemoPass123! |
+| Super Admin | admin@samanvay.demo | DemoPass123! |
+| Bureau Admin (Regulation) | regadmin@samanvay.demo | DemoPass123! |
+| Bureau Admin (PGRC) | pgrcadmin@samanvay.demo | DemoPass123! |
+| Case Officer | officer1@samanvay.demo | DemoPass123! |
+| Regional Officer | regional@samanvay.demo | DemoPass123! |
+| Senior Management | mgmt@samanvay.demo | DemoPass123! |
 
 ## Testing
 

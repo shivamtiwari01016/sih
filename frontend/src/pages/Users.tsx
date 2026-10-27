@@ -354,7 +354,7 @@ export default function Users() {
               type="email"
               value={form.email}
               onChange={(event) => setForm({ ...form, email: event.target.value })}
-              placeholder="name@civicresolve.demo"
+              placeholder="name@samanvay.demo"
             />
           </Field>
           <Field

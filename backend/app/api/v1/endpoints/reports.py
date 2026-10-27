@@ -266,7 +266,7 @@ def export_report(
             ]
         )
 
-    filename = f"civicresolve-complaints-{date.today().isoformat()}.csv"
+    filename = f"samanvay-complaints-{date.today().isoformat()}.csv"
     response = StreamingResponse(iter([buffer.getvalue()]), media_type="text/csv")
     response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response

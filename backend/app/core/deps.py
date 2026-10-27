@@ -67,6 +67,24 @@ def get_current_user(
     return user
 
 
+def get_current_user_optional(
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> Optional[User]:
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        user_id = payload.get("sub")
+        if not user_id:
+            return None
+        user_uuid = uuid.UUID(str(user_id))
+    except (JWTError, ValueError):
+        return None
+
+    return db.query(User).filter(User.id == user_uuid, User.active == True).first()
+
+
 def require_roles(*roles):
     def _checker(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role not in roles:

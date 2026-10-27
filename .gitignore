@@ -9,3 +9,4 @@ postgres_data/
 *.log
 *.db
 .pytest_cache/
+.venv

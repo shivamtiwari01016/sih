@@ -1,19 +1,50 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { ShieldCheck } from 'lucide-react'
-import { useAuth } from '../context/AuthContext'
+import { useAuth, type AuthUser } from '../context/AuthContext'
 import { errorMessage } from '../lib/api'
 import { Button, ErrorBanner, Field, Input } from '../components/ui'
 
 const demoAccounts = [
-  { label: 'Super Admin', email: 'admin@civicresolve.demo' },
-  { label: 'Bureau Admin', email: 'regadmin@civicresolve.demo' },
-  { label: 'Case Officer', email: 'officer1@civicresolve.demo' },
-  { label: 'Management', email: 'mgmt@civicresolve.demo' },
+  {
+    chipLabel: 'RB Officer (R.K. Sharma)',
+    role: 'RB Officer',
+    bureau: 'Regulation Bureau',
+    email: 'sharma@samanvay.demo',
+  },
+  {
+    chipLabel: 'PGRC Officer (Sunita Verma)',
+    role: 'PGRC Officer',
+    bureau: 'PGRC',
+    email: 'verma@samanvay.demo',
+  },
+  {
+    chipLabel: 'Senior Management (Dr. Ramesh Rao)',
+    role: 'Senior Management',
+    bureau: 'AICTE HQ',
+    email: 'rao@samanvay.demo',
+  },
+  {
+    chipLabel: 'Auditor',
+    role: 'Auditor',
+    bureau: 'Audit Directorate',
+    email: 'auditor@samanvay.demo',
+  },
 ]
 
+function getPostLoginRoute(roleStr: string): string {
+  const role = (roleStr || '').toLowerCase()
+  if (role.includes('auditor')) {
+    return '/audit-logs'
+  }
+  if (role.includes('management')) {
+    return '/dashboard?tab=cop'
+  }
+  return '/dashboard?tab=my-desk'
+}
+
 export default function Login() {
-  const [email, setEmail] = useState('admin@civicresolve.demo')
+  const [email, setEmail] = useState('sharma@samanvay.demo')
   const [password, setPassword] = useState('DemoPass123!')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -21,7 +52,7 @@ export default function Login() {
   const { user, login } = useAuth()
 
   if (user) {
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to={getPostLoginRoute(user.role)} replace />
   }
 
   const handleLogin = async (event: FormEvent) => {
@@ -29,8 +60,9 @@ export default function Login() {
     setLoading(true)
     setError('')
     try {
-      await login(email.trim(), password)
-      navigate('/dashboard')
+      const loggedUser: AuthUser = await login(email.trim(), password)
+      const targetRoute = getPostLoginRoute(loggedUser?.role || '')
+      navigate(targetRoute)
     } catch (err) {
       setError(errorMessage(err))
     } finally {
@@ -48,8 +80,8 @@ export default function Login() {
                 <ShieldCheck className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-xl font-bold">CivicResolve Intelligence</h1>
-                <p className="text-xs text-slate-300">Institution Complaint Monitoring</p>
+                <h1 className="text-xl font-bold">Samanvay</h1>
+                <p className="text-xs text-slate-300">AICTE SIH26264 · Secure Complaint Coordination</p>
               </div>
             </div>
             <h2 className="mt-10 text-3xl font-bold leading-tight">
@@ -57,7 +89,7 @@ export default function Login() {
             </h2>
             <p className="mt-4 text-sm leading-relaxed text-slate-300">
               Track complaints across AICTE bureaus, review explainable overlap suggestions,
-              coordinate transfers, monitor SLAs and generate reports.
+              coordinate transfers, monitor SLAs and generate audit-proven reports.
             </p>
             <ul className="mt-8 space-y-3 text-sm text-slate-200">
               <li>• Unified institution and complaint registry</li>
@@ -67,7 +99,7 @@ export default function Login() {
             </ul>
           </div>
           <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3 text-xs text-slate-300">
-            Demo prototype — use only synthetic demonstration data. Not affiliated with AICTE.
+            Samanvay AICTE Prototype · AICTE SIH26264 · Secure Complaint Coordination System.
           </div>
         </div>
 
@@ -89,7 +121,7 @@ export default function Login() {
                 autoComplete="username"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="admin@civicresolve.demo"
+                placeholder="sharma@samanvay.demo"
               />
             </Field>
             <Field label="Password" required>
@@ -111,21 +143,33 @@ export default function Login() {
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Quick-fill demo accounts
             </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {demoAccounts.map((account) => (
-                <button
-                  key={account.email}
-                  type="button"
-                  onClick={() => {
-                    setEmail(account.email)
-                    setPassword('DemoPass123!')
-                    setError('')
-                  }}
-                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-400 hover:bg-slate-50"
-                >
-                  {account.label}
-                </button>
-              ))}
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {demoAccounts.map((account) => {
+                const isSelected = email === account.email
+                return (
+                  <button
+                    key={account.email}
+                    type="button"
+                    onClick={() => {
+                      setEmail(account.email)
+                      setPassword('DemoPass123!')
+                      setError('')
+                    }}
+                    className={`rounded-lg border p-2.5 text-left transition-all ${
+                      isSelected
+                        ? 'border-blue-600 bg-blue-50/70 shadow-xs'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="text-xs font-bold text-slate-900 truncate">
+                      {account.chipLabel}
+                    </div>
+                    <div className="mt-0.5 text-[11px] font-medium text-slate-500">
+                      {account.role} · {account.bureau}
+                    </div>
+                  </button>
+                )
+              })}
             </div>
             <p className="mt-3 text-xs text-slate-500">
               All demo accounts use the password <span className="font-mono">DemoPass123!</span>

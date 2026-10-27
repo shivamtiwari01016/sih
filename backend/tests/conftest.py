@@ -5,10 +5,11 @@ FastAPI application (routing, auth, validation, serialisation, persistence).
 """
 import os
 import sys
+import tempfile
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
-TEST_DB_PATH = "/tmp/opencode/civicresolve_test.db"
+TEST_DB_PATH = os.path.join(tempfile.gettempdir(), "civicresolve_test.db").replace("\\", "/")
 
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
 os.environ["USE_SEMANTIC_MATCHING"] = "False"

@@ -111,7 +111,7 @@ export default function Reports() {
       const url = URL.createObjectURL(new Blob([response.data], { type: 'text/csv' }))
       const link = document.createElement('a')
       link.href = url
-      link.download = `civicresolve-complaints-${new Date().toISOString().slice(0, 10)}.csv`
+      link.download = `samanvay-complaints-${new Date().toISOString().slice(0, 10)}.csv`
       document.body.appendChild(link)
       link.click()
       link.remove()

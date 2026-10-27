@@ -27,7 +27,7 @@ def test_health_endpoint(client):
 def test_login_success_and_current_user(client):
     response = client.post(
         "/api/auth/login",
-        data={"username": "admin@test.demo", "password": PASSWORD},
+        data={"username": "admin@samanvay.demo", "password": PASSWORD},
     )
     assert response.status_code == 200
     body = response.json()
@@ -37,7 +37,7 @@ def test_login_success_and_current_user(client):
     me = client.get("/api/auth/me", headers=auth(body["access_token"]))
     assert me.status_code == 200
     profile = me.json()
-    assert profile["email"] == "admin@test.demo"
+    assert profile["email"] == "admin@samanvay.demo"
     assert profile["role"] == "Super Administrator"
     assert profile["bureau_id"] is None
     assert profile["bureau_name"] is None
@@ -47,7 +47,7 @@ def test_login_success_and_current_user(client):
 def test_login_rejects_bad_credentials(client):
     response = client.post(
         "/api/auth/login",
-        data={"username": "admin@test.demo", "password": "wrong-password"},
+        data={"username": "admin@samanvay.demo", "password": "wrong-password"},
     )
     assert response.status_code == 401
 
@@ -70,14 +70,14 @@ def test_change_password_flow(client):
     assert (
         client.post(
             "/api/auth/login",
-            data={"username": "admin@test.demo", "password": PASSWORD},
+            data={"username": "admin@samanvay.demo", "password": PASSWORD},
         ).status_code
         == 401
     )
     assert (
         client.post(
             "/api/auth/login",
-            data={"username": "admin@test.demo", "password": "NewPass123!"},
+            data={"username": "admin@samanvay.demo", "password": "NewPass123!"},
         ).status_code
         == 200
     )
@@ -614,7 +614,7 @@ def test_notifications_are_created_and_can_be_read(client):
     admin_token = login(client)
     complaint = create_complaint(client, admin_token)
 
-    officer_token = login(client, "officer@test.demo")
+    officer_token = login(client, "officer@samanvay.demo")
     notifications = client.get("/api/notifications", headers=auth(officer_token))
     assert notifications.status_code == 200
     items = notifications.json()
@@ -766,7 +766,7 @@ def test_user_management(client):
         headers=auth(token),
         json={
             "full_name": "New Officer",
-            "email": "newofficer@test.demo",
+            "email": "newofficer@samanvay.demo",
             "password": "OfficerPass123!",
             "role": "Case Officer",
         },
@@ -778,7 +778,7 @@ def test_user_management(client):
         headers=auth(token),
         json={
             "full_name": "New User",
-            "email": "newuser@test.demo",
+            "email": "newuser@samanvay.demo",
             "password": "UserPass123!",
             "role": "Wizard",
         },
@@ -790,7 +790,7 @@ def test_user_management(client):
         headers=auth(token),
         json={
             "full_name": "New Officer",
-            "email": "newofficer@test.demo",
+            "email": "newofficer@samanvay.demo",
             "password": "OfficerPass123!",
             "role": "Case Officer",
             "bureau_id": SEED["bureaus"][0],
@@ -805,7 +805,7 @@ def test_user_management(client):
         headers=auth(token),
         json={
             "full_name": "Duplicate Officer",
-            "email": "newofficer@test.demo",
+            "email": "newofficer@samanvay.demo",
             "password": "OfficerPass123!",
             "role": "Case Officer",
             "bureau_id": SEED["bureaus"][0],
@@ -830,7 +830,7 @@ def test_user_management(client):
     # The deactivated user must not be able to log in.
     blocked = client.post(
         "/api/auth/login",
-        data={"username": "newofficer@test.demo", "password": "OfficerPass123!"},
+        data={"username": "newofficer@samanvay.demo", "password": "OfficerPass123!"},
     )
     assert blocked.status_code == 400
 
@@ -857,7 +857,7 @@ def test_audit_logs(client):
 # Role based access control
 # ---------------------------------------------------------------------------
 def test_senior_management_is_read_only(client):
-    token = login(client, "management@test.demo")
+    token = login(client, "management@samanvay.demo")
 
     assert client.get("/api/complaints", headers=auth(token)).status_code == 200
     assert client.get("/api/dashboard/summary", headers=auth(token)).status_code == 200
@@ -879,7 +879,7 @@ def test_senior_management_is_read_only(client):
 
 
 def test_bureau_admin_cannot_manage_users_or_bureaus(client):
-    token = login(client, "bureauadmin@test.demo")
+    token = login(client, "bureauadmin@samanvay.demo")
 
     assert client.get("/api/audit-logs", headers=auth(token)).status_code == 200
     assert (
@@ -888,7 +888,7 @@ def test_bureau_admin_cannot_manage_users_or_bureaus(client):
             headers=auth(token),
             json={
                 "full_name": "Blocked User",
-                "email": "blocked@test.demo",
+                "email": "blocked@samanvay.demo",
                 "password": "BlockedPass123!",
                 "role": "Senior Management",
             },
@@ -906,7 +906,7 @@ def test_bureau_admin_cannot_manage_users_or_bureaus(client):
 
 
 def test_case_officer_can_write_cases(client):
-    token = login(client, "officer@test.demo")
+    token = login(client, "officer@samanvay.demo")
     complaint = create_complaint(client, token)
     action = client.post(
         f"/api/complaints/{complaint['id']}/actions",

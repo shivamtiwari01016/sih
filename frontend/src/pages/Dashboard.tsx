@@ -297,12 +297,22 @@ export default function Dashboard() {
           {/* Overlaps Awaiting Reply */}
           {deskData?.overlaps_awaiting && deskData.overlaps_awaiting.length > 0 && (
             <div className="space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                <GitBranch className="h-4 w-4 text-purple-600" />
-                {t('desk.overlaps_awaiting')}
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {deskData.overlaps_awaiting.map((o) => (
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                  <GitBranch className="h-4 w-4 text-purple-600" />
+                  {t('desk.overlaps_awaiting')}
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate('/overlaps')}
+                  className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto font-semibold"
+                >
+                  View all ({deskData.overlaps_awaiting_count}) &rarr;
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {deskData.overlaps_awaiting.slice(0, 3).map((o) => (
                   <div key={o.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col justify-between">
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
@@ -333,13 +343,23 @@ export default function Dashboard() {
 
           {/* Prioritized Queue */}
           <div className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-blue-600" />
-              {t('desk.urgent_queue')} (Ranked by Deadline, Severity & Overlap)
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                <Clock className="h-4 w-4 text-blue-600" />
+                {t('desk.urgent_queue')} (Ranked by Deadline, Severity & Overlap)
+              </h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate('/complaints')}
+                className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto font-semibold"
+              >
+                View all ({deskData?.urgent_cases_count ?? 0}) &rarr;
+              </Button>
+            </div>
             {deskData?.prioritised_queue && deskData.prioritised_queue.length > 0 ? (
               <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-xs divide-y divide-slate-100">
-                {deskData.prioritised_queue.map((c) => (
+                {deskData.prioritised_queue.slice(0, 5).map((c) => (
                   <div key={c.case_id} className="p-3.5 flex flex-wrap items-center justify-between gap-3 hover:bg-slate-50 transition-colors">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">

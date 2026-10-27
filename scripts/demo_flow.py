@@ -18,11 +18,21 @@ import os
 import sys
 from datetime import date, timedelta
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.join(BASE_DIR, "backend")
 if not os.path.isdir(BACKEND_DIR):
     BACKEND_DIR = BASE_DIR
 sys.path.insert(0, BACKEND_DIR)
+
+if "DATABASE_URL" not in os.environ:
+    os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(
+        BACKEND_DIR, "civicresolve.db"
+    )
 
 from fastapi.testclient import TestClient
 from app.main import app
@@ -48,7 +58,7 @@ def run_demo():
     # Step 1: Log in as Sharma (RB Officer) - My Desk Opens
     # --------------------------------------------------------------------------
     print("\n[STEP 1] Logging in as R.K. Sharma (Regulation Bureau Officer)...")
-    sharma_token = login("sharma@aicte.gov.in")
+    sharma_token = login("sharma@samanvay.demo")
     sharma_headers = auth_headers(sharma_token)
 
     my_desk = client.get("/api/dashboard/my-desk", headers=sharma_headers)
@@ -163,7 +173,7 @@ def run_demo():
     # Step 4: Switch to Verma (PGRC Officer) - Receives request & accepts lead
     # --------------------------------------------------------------------------
     print("\n[STEP 4] Switching to Sunita Verma (PGRC Officer)...")
-    verma_token = login("verma@aicte.gov.in")
+    verma_token = login("verma@samanvay.demo")
     verma_headers = auth_headers(verma_token)
 
     verma_desk = client.get("/api/dashboard/my-desk", headers=verma_headers)
@@ -244,7 +254,7 @@ def run_demo():
     # Step 7: Switch to Dr. Ramesh Rao (Senior Management)
     # --------------------------------------------------------------------------
     print("\n[STEP 7] Switching to Dr. Ramesh Rao (Senior Management)...")
-    rao_token = login("rao@aicte.gov.in")
+    rao_token = login("rao@samanvay.demo")
     rao_headers = auth_headers(rao_token)
 
     # 7a. Common Operating Picture (COP) Map
@@ -277,7 +287,7 @@ def run_demo():
     # Step 8: Switch to Chief Vigilance Auditor - Verify Cryptographic Chain
     # --------------------------------------------------------------------------
     print("\n[STEP 8] Switching to Auditor (Audit Directorate)...")
-    auditor_token = login("auditor@aicte.gov.in")
+    auditor_token = login("auditor@samanvay.demo")
     auditor_headers = auth_headers(auditor_token)
 
     integrity = client.get("/api/audit-logs/verify-integrity", headers=auditor_headers)
@@ -291,7 +301,7 @@ def run_demo():
     assert i_data["total_records"] >= 2140
 
     # 8b. Break-Glass Emergency Override Protocol Verification
-    bg_officer_token = login("patel@aicte.gov.in")
+    bg_officer_token = login("patel@samanvay.demo")
     bg_resp = client.post(
         f"/api/complaints/{rb_case_id}/break-glass",
         headers=auth_headers(bg_officer_token),

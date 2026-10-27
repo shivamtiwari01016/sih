@@ -17,6 +17,9 @@ class Settings(BaseSettings):
 
     # Comma separated list, e.g. "http://localhost:3000,http://localhost:5173"
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://localhost:8000"
+    CORS_ORIGIN_REGEX: str = r"https://.*\.vercel\.app"
+
+    AUTO_SEED: bool = True
 
     DATABASE_URL: str = os.environ.get("DATABASE_URL", _DEFAULT_DB)
 
@@ -50,7 +53,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
-    EMAIL_FROM: str = "noreply@civicresolve.demo"
+    EMAIL_FROM: str = "noreply@samanvay.demo"
 
     DEMO_MODE: bool = True
     SHOW_DEMO_BADGE: bool = True

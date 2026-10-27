@@ -92,17 +92,34 @@ Visit `http://localhost:5173` (or `http://localhost:3000`).
 ```bash
 pytest backend/tests/
 ```
-*(All 36 API integration tests pass).*
+*(All 38 API integration tests pass: 36 core + 2 institution EDA & ABAC tests).*
 
 ---
 
-## 6. Demo Accounts (Password: `DemoPass123!`)
+## 6. Production Deployment (Vercel & Render)
+
+For full step-by-step instructions, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+- **Backend (Render)**:
+  - Push repository to GitHub.
+  - In Render, create a **New Blueprint** from [`render.yaml`](render.yaml) or a manual Python Web Service with root directory `backend`.
+  - Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+  - Health check: `/health`
+  - Automatic seeding: Set `AUTO_SEED=true` to automatically populate 300+ institutions and demo data on fresh instances.
+- **Frontend (Vercel)**:
+  - In Vercel, import repository with root directory `frontend` and preset `Vite`.
+  - Add environment variable `VITE_API_BASE_URL=https://<your-render-app>.onrender.com`.
+  - SPA routing rewrites and caching headers are configured in [`frontend/vercel.json`](frontend/vercel.json) and root [`vercel.json`](vercel.json).
+
+---
+
+## 7. Demo Accounts (Password: `DemoPass123!`)
 
 | Role | User Name | Email | Bureau |
 | :--- | :--- | :--- | :--- |
-| **RB Officer** | R.K. Sharma | `sharma@aicte.gov.in` | Regulation Bureau (REG) |
-| **PGRC Officer** | Sunita Verma | `verma@aicte.gov.in` | Public Grievance Cell (PGRC) |
-| **Regional Officer** | Kirit Patel | `patel@aicte.gov.in` | Regional Office (RO - West) |
-| **Senior Management** | Dr. Ramesh Rao | `rao@aicte.gov.in` | Member Secretary |
-| **Auditor** | Chief Vigilance Auditor | `auditor@aicte.gov.in` | Audit Directorate |
-| **System Admin** | Administrator | `admin@aicte.gov.in` | AICTE Headquarters |
+| **RB Officer** | R.K. Sharma | `sharma@samanvay.demo` | Regulation Bureau (REG) |
+| **PGRC Officer** | Sunita Verma | `verma@samanvay.demo` | Public Grievance Cell (PGRC) |
+| **Regional Officer** | Kirit Patel | `patel@samanvay.demo` | Regional Office (RO - West) |
+| **Senior Management** | Dr. Ramesh Rao | `rao@samanvay.demo` | Member Secretary |
+| **Auditor** | Chief Vigilance Auditor | `auditor@samanvay.demo` | Audit Directorate |
+| **System Admin** | Administrator | `admin@samanvay.demo` | AICTE Headquarters |

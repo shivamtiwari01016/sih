@@ -57,6 +57,18 @@ const translations: Record<string, Record<Language, string>> = {
   'status.under_process': { en: 'Under Process', hi: 'प्रक्रियाधीन' },
   'status.disposed': { en: 'Disposed', hi: 'निस्तारित' },
   'status.escalated': { en: 'Escalated', hi: 'उच्चाधिकारी को प्रेषित' },
+
+  // Institution EDA Detail
+  'inst.detail': { en: 'Institution Detail & EDA', hi: 'संस्थान विवरण एवं डेटा विश्लेषण' },
+  'inst.overview_eda': { en: 'Overview & EDA', hi: 'अवलोकन एवं विश्लेषण' },
+  'inst.cases': { en: 'Cases', hi: 'शिकायतें' },
+  'inst.overlaps': { en: 'Overlaps', hi: 'ओवरलैप' },
+  'inst.timeline': { en: 'Timeline', hi: 'टाइमलाइन' },
+  'inst.watch': { en: 'Watch', hi: 'निगरानी' },
+  'inst.watching': { en: 'Watching', hi: 'निगरानी में' },
+  'inst.add_complaint': { en: 'Add Complaint', hi: 'शिकायत दर्ज करें' },
+  'inst.risk_score': { en: 'Risk Score', hi: 'जोखिम स्कोर' },
+  'inst.insufficient_data': { en: 'Not enough data for trends (< 5 complaints on record)', hi: 'रुझानों के लिए पर्याप्त डेटा नहीं (< 5 शिकायतें)' },
 }
 
 const LanguageContext = createContext<LanguageContextType>({

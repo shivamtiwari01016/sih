@@ -37,14 +37,14 @@ def seed_database():
         users = [
             User(
                 full_name="Test Super Admin",
-                email="admin@test.demo",
+                email="admin@samanvay.demo",
                 password_hash=PASSWORD_HASH,
                 role=UserRole.SUPER_ADMIN,
                 active=True,
             ),
             User(
                 full_name="Test Bureau Admin",
-                email="bureauadmin@test.demo",
+                email="bureauadmin@samanvay.demo",
                 password_hash=PASSWORD_HASH,
                 role=UserRole.BUREAU_ADMIN,
                 bureau_id=bureaus[0].id,
@@ -52,7 +52,7 @@ def seed_database():
             ),
             User(
                 full_name="Test Case Officer",
-                email="officer@test.demo",
+                email="officer@samanvay.demo",
                 password_hash=PASSWORD_HASH,
                 role=UserRole.CASE_OFFICER,
                 bureau_id=bureaus[0].id,
@@ -60,14 +60,14 @@ def seed_database():
             ),
             User(
                 full_name="Test Senior Management",
-                email="management@test.demo",
+                email="management@samanvay.demo",
                 password_hash=PASSWORD_HASH,
                 role=UserRole.SENIOR_MANAGEMENT,
                 active=True,
             ),
             User(
                 full_name="Test Regional Officer",
-                email="regional@test.demo",
+                email="regional@samanvay.demo",
                 password_hash=PASSWORD_HASH,
                 role=UserRole.REGIONAL_OFFICER,
                 bureau_id=bureaus[1].id,
@@ -115,7 +115,7 @@ def make_client() -> TestClient:
     return TestClient(app)
 
 
-def login(client: TestClient, email: str = "admin@test.demo", password: str = PASSWORD) -> str:
+def login(client: TestClient, email: str = "admin@samanvay.demo", password: str = PASSWORD) -> str:
     response = client.post(
         "/api/auth/login",
         data={"username": email, "password": password},

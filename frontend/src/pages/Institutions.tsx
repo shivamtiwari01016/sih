@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Building2, Eye, Plus, Search } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Building2, Eye, MapPin, Plus, Search, Table } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, errorMessage } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
-import { formatDate } from '../lib/utils'
 import {
   Badge,
   Button,
-  DetailRow,
   EmptyState,
   ErrorBanner,
   Field,
@@ -18,6 +17,7 @@ import {
   Select,
   Textarea,
 } from '../components/ui'
+import CopMap from '../components/CopMap'
 
 interface Institution {
   id: string
@@ -36,19 +36,11 @@ interface Institution {
   affiliation: string | null
   institution_status: string | null
   complaint_count: number
+  lat?: number | null
+  lng?: number | null
   created_at: string | null
 }
 
-interface InstitutionComplaint {
-  id: string
-  complaint_number: string
-  subject: string
-  category: string
-  current_status: string
-  priority: string
-  received_date: string
-  assigned_bureau: string | null
-}
 
 const emptyForm = {
   institution_name: '',
@@ -78,6 +70,7 @@ const ownerships = ['Government', 'Government-aided', 'Private', 'Private-aided'
 const regions = ['West', 'South', 'North', 'East', 'Central', 'Northeast']
 
 export default function Institutions() {
+  const navigate = useNavigate()
   const { canWrite } = useAuth()
   const [institutions, setInstitutions] = useState<Institution[]>([])
   const [loading, setLoading] = useState(true)
@@ -86,9 +79,7 @@ export default function Institutions() {
   const [addOpen, setAddOpen] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
-  const [detail, setDetail] = useState<Institution | null>(null)
-  const [detailComplaints, setDetailComplaints] = useState<InstitutionComplaint[]>([])
-  const [detailLoading, setDetailLoading] = useState(false)
+  const [viewMode, setViewMode] = useState<'table' | 'map'>('table')
 
   const load = useCallback(async (term = '') => {
     setLoading(true)
@@ -140,35 +131,37 @@ export default function Institutions() {
     }
   }
 
-  const openDetail = async (institution: Institution) => {
-    setDetail(institution)
-    setDetailComplaints([])
-    setDetailLoading(true)
-    try {
-      const [detailResponse, complaintsResponse] = await Promise.all([
-        api.get<Institution>(`/api/institutions/${institution.id}`),
-        api.get<InstitutionComplaint[]>(`/api/institutions/${institution.id}/complaints`),
-      ])
-      setDetail(detailResponse.data)
-      setDetailComplaints(complaintsResponse.data)
-    } catch (err) {
-      toast.error(errorMessage(err))
-    } finally {
-      setDetailLoading(false)
-    }
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader
         title="Institution Registry"
         subtitle="Curated catalog of all 23 IITs and 133 major Maharashtra institutions, with full contact and affiliation details"
         actions={
-          canWrite ? (
-            <Button onClick={() => setAddOpen(true)}>
-              <Plus className="h-4 w-4" /> Add Institution
-            </Button>
-          ) : null
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 border border-slate-200 rounded-lg p-0.5 bg-slate-100">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                  viewMode === 'table' ? 'bg-white shadow-xs text-slate-900 font-bold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Table className="h-3.5 w-3.5" /> Table
+              </button>
+              <button
+                onClick={() => setViewMode('map')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                  viewMode === 'map' ? 'bg-white shadow-xs text-blue-700 font-bold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <MapPin className="h-3.5 w-3.5 text-blue-600" /> Free Leaflet Map
+              </button>
+            </div>
+            {canWrite && (
+              <Button onClick={() => setAddOpen(true)}>
+                <Plus className="h-4 w-4" /> Add Institution
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -189,79 +182,114 @@ export default function Institutions() {
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-        {loading ? (
-          <LoadingBlock label="Loading institutions…" />
-        ) : institutions.length === 0 ? (
-          <EmptyState
-            title="No institutions found"
-            description="Add an institution to begin registering complaints."
-            action={
-              canWrite ? (
-                <Button onClick={() => setAddOpen(true)}>
-                  <Plus className="h-4 w-4" /> Add Institution
-                </Button>
-              ) : undefined
-            }
+      {viewMode === 'map' ? (
+        <div className="space-y-3">
+          <CopMap
+            institutions={institutions.map((i) => ({
+              id: i.id,
+              name: i.institution_name,
+              aicte_id: i.aicte_permanent_id || '',
+              city: i.city || '',
+              state: i.state || '',
+              region: i.region || '',
+              lat: i.lat || (18.5204 + (Math.abs(i.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % 1000) * 0.01),
+              lng: i.lng || (73.8567 + (Math.abs(i.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % 800) * 0.01),
+              open_cases: i.complaint_count || 0,
+              risk_score: Math.min((i.complaint_count || 0) * 12, 100),
+              has_overlap: false,
+            }))}
+            onSelectInstitution={(inst) => {
+              navigate(`/institutions/${inst.id}`)
+            }}
+            height="620px"
           />
-        ) : (
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                {['Institution Name', 'AICTE ID', 'Type', 'Region', 'State', 'Complaints', ''].map(
-                  (heading) => (
-                    <th
-                      key={heading}
-                      className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
-                    >
-                      {heading}
-                    </th>
-                  ),
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {institutions.map((institution) => (
-                <tr key={institution.id} className="hover:bg-slate-50">
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-md bg-blue-50 p-1.5 text-blue-600">
-                        <Building2 className="h-4 w-4" />
-                      </span>
-                      <div>
-                        <p className="font-medium text-slate-900">{institution.institution_name}</p>
-                        <p className="text-xs text-slate-500">
-                          {institution.city || '—'}
-                          {institution.contact_email ? ` · ${institution.contact_email}` : ''}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 text-slate-600">
-                    {institution.aicte_permanent_id || '—'}
-                  </td>
-                  <td className="px-5 py-3 text-slate-600">
-                    <p>{institution.institution_type || '—'}</p>
-                    <p className="text-xs text-slate-400">{institution.ownership || ''}</p>
-                  </td>
-                  <td className="px-5 py-3 text-slate-600">{institution.region || '—'}</td>
-                  <td className="px-5 py-3 text-slate-600">{institution.state || '—'}</td>
-                  <td className="px-5 py-3">
-                    <Badge className="bg-slate-100 text-slate-700">
-                      {institution.complaint_count}
-                    </Badge>
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    <Button variant="ghost" size="sm" onClick={() => void openDetail(institution)}>
-                      <Eye className="h-3.5 w-3.5" /> View
-                    </Button>
-                  </td>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+          {loading ? (
+            <LoadingBlock label="Loading institutions…" />
+          ) : institutions.length === 0 ? (
+            <EmptyState
+              title="No institutions found"
+              description="Add an institution to begin registering complaints."
+              action={
+                canWrite ? (
+                  <Button onClick={() => setAddOpen(true)}>
+                    <Plus className="h-4 w-4" /> Add Institution
+                  </Button>
+                ) : undefined
+              }
+            />
+          ) : (
+            <table className="min-w-full divide-y divide-slate-200 text-sm">
+              <thead className="bg-slate-50">
+                <tr>
+                  {['Institution Name', 'AICTE ID', 'Type', 'Region', 'State', 'Complaints', ''].map(
+                    (heading) => (
+                      <th
+                        key={heading}
+                        className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+                      >
+                        {heading}
+                      </th>
+                    ),
+                  )}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {institutions.map((institution) => (
+                  <tr
+                    key={institution.id}
+                    onClick={() => navigate(`/institutions/${institution.id}`)}
+                    className="hover:bg-slate-50 cursor-pointer transition-colors"
+                  >
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-md bg-blue-50 p-1.5 text-blue-600">
+                          <Building2 className="h-4 w-4" />
+                        </span>
+                        <div>
+                          <p className="font-medium text-slate-900">{institution.institution_name}</p>
+                          <p className="text-xs text-slate-500">
+                            {institution.city || '—'}
+                            {institution.contact_email ? ` · ${institution.contact_email}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 text-slate-600">
+                      {institution.aicte_permanent_id || '—'}
+                    </td>
+                    <td className="px-5 py-3 text-slate-600">
+                      <p>{institution.institution_type || '—'}</p>
+                      <p className="text-xs text-slate-400">{institution.ownership || ''}</p>
+                    </td>
+                    <td className="px-5 py-3 text-slate-600">{institution.region || '—'}</td>
+                    <td className="px-5 py-3 text-slate-600">{institution.state || '—'}</td>
+                    <td className="px-5 py-3">
+                      <Badge className="bg-slate-100 text-slate-700">
+                        {institution.complaint_count}
+                      </Badge>
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          navigate(`/institutions/${institution.id}`)
+                        }}
+                      >
+                        <Eye className="h-3.5 w-3.5" /> View
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       <Modal
         open={addOpen}
@@ -386,102 +414,6 @@ export default function Institutions() {
             />
           </Field>
         </div>
-      </Modal>
-
-      <Modal
-        open={Boolean(detail)}
-        onClose={() => setDetail(null)}
-        title={detail?.institution_name || 'Institution'}
-        description="Institution profile and complaint history"
-        size="lg"
-      >
-        {detail && (
-          <div className="space-y-6">
-            <dl className="grid gap-4 sm:grid-cols-3">
-              <DetailRow label="AICTE ID" value={detail.aicte_permanent_id || '—'} />
-              <DetailRow label="Type" value={detail.institution_type || '—'} />
-              <DetailRow label="Status" value={detail.institution_status || 'Active'} />
-              <DetailRow label="Region" value={detail.region || '—'} />
-              <DetailRow label="State / City" value={[detail.state, detail.city].filter(Boolean).join(' / ') || '—'} />
-              <DetailRow label="District" value={detail.district || '—'} />
-              <DetailRow label="Ownership" value={detail.ownership || '—'} />
-              <DetailRow label="Established" value={detail.established_year || '—'} />
-              <DetailRow
-                label="Affiliation"
-                value={detail.affiliation || '—'}
-              />
-              <DetailRow label="Contact" value={detail.contact_email || '—'} />
-              <DetailRow
-                label="Website"
-                value={
-                  detail.website ? (
-                    <a
-                      href={detail.website}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-blue-700 hover:underline"
-                    >
-                      {detail.website.replace(/^https?:\/\//, '')}
-                    </a>
-                  ) : (
-                    '—'
-                  )
-                }
-              />
-              <DetailRow label="Address" value={detail.address || '—'} />
-              <DetailRow label="Registered" value={formatDate(detail.created_at)} />
-              <DetailRow label="Total complaints" value={detail.complaint_count} />
-            </dl>
-
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-900">Complaint history</h3>
-                <span className="text-xs text-slate-500">
-                  {detailComplaints.length} record{detailComplaints.length === 1 ? '' : 's'}
-                </span>
-              </div>
-              {detailLoading ? (
-                <LoadingBlock label="Loading complaints…" />
-              ) : detailComplaints.length === 0 ? (
-                <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500">
-                  No complaints have been registered for this institution.
-                </p>
-              ) : (
-                <div className="max-h-72 overflow-y-auto rounded-md border border-slate-200">
-                  <table className="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead className="sticky top-0 bg-slate-50">
-                      <tr>
-                        {['Complaint', 'Subject', 'Status', 'Priority', 'Received'].map((heading) => (
-                          <th
-                            key={heading}
-                            className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-                          >
-                            {heading}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {detailComplaints.map((complaint) => (
-                        <tr key={complaint.id}>
-                          <td className="px-3 py-2 font-medium text-blue-700">
-                            {complaint.complaint_number}
-                          </td>
-                          <td className="px-3 py-2 text-slate-700">{complaint.subject}</td>
-                          <td className="px-3 py-2 text-slate-600">{complaint.current_status}</td>
-                          <td className="px-3 py-2 text-slate-600">{complaint.priority}</td>
-                          <td className="px-3 py-2 text-slate-500">
-                            {formatDate(complaint.received_date)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </Modal>
     </div>
   )

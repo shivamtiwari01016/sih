@@ -9,13 +9,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_user, parse_uuid, require_writer
-from app.models.complaint import Complaint, ComplaintStatus, Priority
+from app.core.deps import get_current_user, get_current_user_optional, parse_uuid, require_writer
+from app.models.case_action import CaseAction
+from app.models.complaint import Complaint, ComplaintStatus, Priority, Sensitivity
 from app.models.institution import Institution
 from app.models.related_case import RelatedCase, ReviewStatus
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.watchlist import Watchlist
 from app.utils.helpers import record_audit
+from app.api.v1.endpoints.overlaps import serialize_overlap
 
 router = APIRouter()
 
@@ -377,6 +379,7 @@ def get_institution_complaints(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     institution_uuid = parse_uuid(id)
     inst = db.query(Institution).filter(Institution.id == institution_uuid).first()
@@ -391,16 +394,311 @@ def get_institution_complaints(
         .limit(limit)
         .all()
     )
-    return [
-        {
+
+    results = []
+    for c in complaints:
+        # ABAC for sensitive complaints: mask subject if not holding bureau and not admin
+        has_access = True
+        is_sensitive = c.sensitivity and c.sensitivity != Sensitivity.NORMAL
+        if is_sensitive and current_user:
+            if current_user.role not in (UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.AUDITOR):
+                if not (c.assigned_bureau_id and current_user.bureau_id and str(c.assigned_bureau_id) == str(current_user.bureau_id)):
+                    has_access = False
+        elif is_sensitive and not current_user:
+            has_access = False
+
+        subject = c.subject if has_access else f"[{c.category} - Sensitive Matter]"
+        results.append({
             "id": str(c.id),
             "complaint_number": c.complaint_number,
-            "subject": c.subject,
+            "subject": subject,
             "category": c.category,
             "current_status": c.current_status.value if c.current_status else None,
             "priority": c.priority.value if c.priority else None,
             "received_date": str(c.received_date),
             "assigned_bureau": c.assigned_bureau.bureau_name if c.assigned_bureau else None,
-        }
-        for c in complaints
+            "is_sensitive": is_sensitive,
+        })
+    return results
+
+
+@router.get("/{id}/eda")
+def get_institution_eda(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Exploratory Data Analysis (EDA) and trends for an institution."""
+    inst_uuid = parse_uuid(id)
+    inst = db.query(Institution).filter(Institution.id == inst_uuid).first()
+    if not inst:
+        raise HTTPException(status_code=404, detail="Institution not found")
+
+    complaints = db.query(Complaint).filter(Complaint.institution_id == inst_uuid).all()
+    total = len(complaints)
+    today = date.today()
+
+    open_complaints = [
+        c for c in complaints
+        if c.current_status not in (ComplaintStatus.DISPOSED, ComplaintStatus.CLOSED)
     ]
+    disposed_complaints = [
+        c for c in complaints
+        if c.current_status in (ComplaintStatus.DISPOSED, ComplaintStatus.CLOSED)
+    ]
+    overdue_complaints = [
+        c for c in open_complaints
+        if c.expected_disposal_date and c.expected_disposal_date < today
+    ]
+
+    inst_comp_ids = [c.id for c in complaints]
+    active_overlaps = 0
+    if inst_comp_ids:
+        active_overlaps = (
+            db.query(RelatedCase)
+            .filter(
+                or_(
+                    RelatedCase.complaint_id_1.in_(inst_comp_ids),
+                    RelatedCase.complaint_id_2.in_(inst_comp_ids),
+                ),
+                RelatedCase.review_status.in_([
+                    ReviewStatus.SUGGESTED,
+                    ReviewStatus.ACKNOWLEDGED,
+                    ReviewStatus.COORDINATING,
+                    ReviewStatus.REQUIRES_FURTHER_REVIEW,
+                ]),
+            )
+            .count()
+        )
+
+    if open_complaints:
+        ages = [(today - c.received_date).days for c in open_complaints if c.received_date]
+        avg_open_age_days = round(sum(ages) / len(ages), 1) if ages else 0.0
+    else:
+        avg_open_age_days = 0.0
+
+    stats = {
+        "total": total,
+        "open": len(open_complaints),
+        "overdue": len(overdue_complaints),
+        "disposed": len(disposed_complaints),
+        "active_overlaps": active_overlaps,
+        "avg_open_age_days": avg_open_age_days,
+    }
+
+    # Monthly trends (last 12 months)
+    monthly = []
+    for i in range(11, -1, -1):
+        y = today.year
+        m = today.month - i
+        while m <= 0:
+            m += 12
+            y -= 1
+        month_label = date(y, m, 1).strftime("%b %Y")
+        rec_count = sum(
+            1 for c in complaints
+            if c.received_date and c.received_date.year == y and c.received_date.month == m
+        )
+        disp_count = sum(
+            1 for c in disposed_complaints
+            if (c.disposed_at and c.disposed_at.year == y and c.disposed_at.month == m)
+            or (not c.disposed_at and c.last_action_at and c.last_action_at.year == y and c.last_action_at.month == m)
+        )
+        monthly.append({
+            "month": month_label,
+            "received": rec_count,
+            "disposed": disp_count,
+        })
+
+    # By category
+    cat_counts: dict[str, int] = {}
+    for c in complaints:
+        cat = c.category or "Other"
+        cat_counts[cat] = cat_counts.get(cat, 0) + 1
+    by_category = [{"category": k, "count": v} for k, v in sorted(cat_counts.items(), key=lambda x: x[1], reverse=True)]
+
+    # By bureau
+    bureau_counts: dict[str, int] = {}
+    for c in complaints:
+        b_name = c.assigned_bureau.bureau_name if c.assigned_bureau else "Unassigned"
+        bureau_counts[b_name] = bureau_counts.get(b_name, 0) + 1
+    by_bureau = [{"bureau": k, "count": v} for k, v in sorted(bureau_counts.items(), key=lambda x: x[1], reverse=True)]
+
+    # By status
+    status_counts: dict[str, int] = {}
+    for c in complaints:
+        st_val = c.current_status.value if c.current_status else "Received"
+        status_counts[st_val] = status_counts.get(st_val, 0) + 1
+    by_status = [{"status": k, "count": v} for k, v in sorted(status_counts.items(), key=lambda x: x[1], reverse=True)]
+
+    # Ageing buckets for open cases
+    ageing = {"0-30": 0, "31-60": 0, "61-90": 0, "90+": 0}
+    for c in open_complaints:
+        if c.received_date:
+            d = (today - c.received_date).days
+            if d <= 30:
+                ageing["0-30"] += 1
+            elif d <= 60:
+                ageing["31-60"] += 1
+            elif d <= 90:
+                ageing["61-90"] += 1
+            else:
+                ageing["90+"] += 1
+
+    # SLA metrics
+    if disposed_complaints:
+        within_sla_disposed = sum(
+            1 for c in disposed_complaints
+            if not c.expected_disposal_date or (c.disposed_at and c.disposed_at.date() <= c.expected_disposal_date)
+        )
+        within_sla_pct = round((within_sla_disposed / len(disposed_complaints)) * 100.0, 1)
+    elif total > 0:
+        non_overdue = total - len(overdue_complaints)
+        within_sla_pct = round((non_overdue / total) * 100.0, 1)
+    else:
+        within_sla_pct = 100.0
+
+    total_all = db.query(func.count(Complaint.id)).scalar() or 1
+    overdue_all = db.query(func.count(Complaint.id)).filter(
+        Complaint.current_status.notin_([ComplaintStatus.DISPOSED, ComplaintStatus.CLOSED]),
+        Complaint.expected_disposal_date < today
+    ).scalar() or 0
+    all_institutions_avg_pct = round(((total_all - overdue_all) / total_all) * 100.0, 1)
+
+    sla = {
+        "within_sla_pct": within_sla_pct,
+        "all_institutions_avg_pct": all_institutions_avg_pct,
+    }
+
+    # Peer metrics
+    if inst.state:
+        peer_insts = db.query(Institution).filter(Institution.state == inst.state).all()
+    else:
+        peer_insts = [inst]
+    peer_ids = [p.id for p in peer_insts]
+    peer_counts = dict(
+        db.query(Complaint.institution_id, func.count(Complaint.id))
+        .filter(Complaint.institution_id.in_(peer_ids))
+        .group_by(Complaint.institution_id)
+        .all()
+    )
+    counts_list = [peer_counts.get(pid, 0) for pid in peer_ids]
+    state_avg_count = round(sum(counts_list) / max(len(counts_list), 1), 1)
+    state_avg_risk = round(sum(min(int(cnt * 12 + 10), 100) for cnt in counts_list) / max(len(counts_list), 1), 1)
+
+    peer = {
+        "institution_count": total,
+        "state_avg_count": state_avg_count,
+        "state_avg_risk": state_avg_risk,
+    }
+
+    # Dynamic Insights (max 4)
+    insights = []
+    if by_category:
+        top_cat = by_category[0]["category"]
+        top_cnt = by_category[0]["count"]
+        top_pct = round((top_cnt / max(total, 1)) * 100, 1)
+        insights.append(f"'{top_cat}' is the primary category, representing {top_pct}% of complaints ({top_cnt} cases).")
+
+    if active_overlaps > 0:
+        insights.append(f"{active_overlaps} active cross-bureau overlap(s) requiring coordinated investigation.")
+    else:
+        insights.append("Zero active jurisdictional conflicts detected across open files.")
+
+    if open_complaints:
+        insights.append(f"Open cases average {avg_open_age_days} days in queue (SLA threshold: 30 days).")
+    else:
+        insights.append("All complaints on record have been successfully disposed.")
+
+    if total >= state_avg_count:
+        ratio = round(total / max(state_avg_count, 1), 1)
+        insights.append(f"Complaint volume is {ratio}x the {inst.state or 'regional'} state peer average ({state_avg_count} cases).")
+    else:
+        insights.append(f"Complaint volume is within the {inst.state or 'regional'} state peer average ({state_avg_count} cases).")
+
+    insights = insights[:4]
+    insufficient_data = total < 5
+
+    return {
+        "institution_id": str(inst.id),
+        "institution_name": inst.institution_name,
+        "insufficient_data": insufficient_data,
+        "stats": stats,
+        "monthly": monthly,
+        "by_category": by_category,
+        "by_bureau": by_bureau,
+        "by_status": by_status,
+        "ageing": ageing,
+        "sla": sla,
+        "peer": peer,
+        "insights": insights,
+    }
+
+
+@router.get("/{id}/overlaps")
+def get_institution_overlaps(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Retrieve all cross-bureau and duplicate overlaps involving complaints of this institution."""
+    inst_uuid = parse_uuid(id)
+    complaint_ids = [c.id for c in db.query(Complaint.id).filter(Complaint.institution_id == inst_uuid).all()]
+    if not complaint_ids:
+        return []
+    overlaps = (
+        db.query(RelatedCase)
+        .filter(
+            or_(
+                RelatedCase.complaint_id_1.in_(complaint_ids),
+                RelatedCase.complaint_id_2.in_(complaint_ids),
+            )
+        )
+        .order_by(RelatedCase.created_at.desc())
+        .all()
+    )
+    return [serialize_overlap(o) for o in overlaps]
+
+
+@router.get("/{id}/timeline")
+def get_institution_timeline(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Merged chronological regulatory case actions across all bureaus for this institution."""
+    inst_uuid = parse_uuid(id)
+    actions = (
+        db.query(CaseAction)
+        .join(Complaint, CaseAction.complaint_id == Complaint.id)
+        .filter(Complaint.institution_id == inst_uuid)
+        .order_by(CaseAction.timestamp.desc())
+        .limit(100)
+        .all()
+    )
+    res = []
+    for a in actions:
+        c = a.complaint
+        is_sensitive = c and c.sensitivity != Sensitivity.NORMAL
+        has_access = True
+        if is_sensitive and current_user:
+            if current_user.role not in (UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.AUDITOR):
+                if not (c.assigned_bureau_id and current_user.bureau_id and str(c.assigned_bureau_id) == str(current_user.bureau_id)):
+                    has_access = False
+        elif is_sensitive and not current_user:
+            has_access = False
+
+        remarks = a.remarks if has_access else "Action details restricted under Need-to-Know policy."
+        res.append({
+            "id": str(a.id),
+            "complaint_id": str(a.complaint_id),
+            "complaint_number": c.complaint_number if c else "Unknown",
+            "action_type": a.action_type,
+            "remarks": remarks,
+            "bureau": a.bureau.bureau_name if a.bureau else None,
+            "officer": a.officer.full_name if (a.officer and has_access) else "Authorized Officer",
+            "timestamp": str(a.timestamp) if a.timestamp else None,
+            "previous_status": a.previous_status.value if a.previous_status else None,
+            "new_status": a.new_status.value if a.new_status else None,
+        })
+    return res

@@ -1,10 +1,11 @@
 import axios, { AxiosError } from 'axios'
 
-const configuredBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
-export const API_BASE = configuredBase
+const rawBase = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '')
+// Prevent duplicate /api if the user sets VITE_API_BASE_URL ending with /api
+export const API_BASE = rawBase.endsWith('/api') ? rawBase.slice(0, -4) : rawBase
 
 export const api = axios.create({
-  baseURL: configuredBase,
+  baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -44,7 +45,7 @@ export function errorMessage(error: unknown): string {
     }
     if (error.response?.data?.message) return String(error.response.data.message)
     if (error.code === 'ERR_NETWORK') {
-      return 'Cannot reach the server. Make sure the backend is running on port 8000.'
+      return 'Cannot reach the server. Please verify the backend is running and reachable.'
     }
     return error.message || 'Something went wrong'
   }

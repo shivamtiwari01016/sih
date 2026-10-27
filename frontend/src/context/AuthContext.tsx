@@ -85,9 +85,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       refreshUser,
-      canWrite: ['Super Administrator', 'Bureau Administrator', 'Case Officer', 'Regional Officer'].includes(role),
-      isAdmin: ['Super Administrator', 'Bureau Administrator'].includes(role),
-      isSuperAdmin: role === 'Super Administrator',
+      canWrite: [
+        'Super Administrator',
+        'Admin',
+        'Bureau Administrator',
+        'Case Officer',
+        'RB Officer',
+        'PGRC Officer',
+        'Regional Officer',
+      ].includes(role),
+      isAdmin: ['Super Administrator', 'Admin', 'Bureau Administrator'].includes(role),
+      isSuperAdmin: ['Super Administrator', 'Admin'].includes(role) || role.toLowerCase().includes('super'),
     }
   }, [user, loading, login, logout, refreshUser])
 

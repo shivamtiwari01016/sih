@@ -5,7 +5,7 @@ from helpers import auth, login
 
 def test_samanvay_abac_sensitive_masking(client):
     """Ensure sensitive categories (Ragging/Whistleblower) mask description for non-holding bureau."""
-    admin_token = login(client, "admin@test.demo")
+    admin_token = login(client, "admin@samanvay.demo")
 
     # Create a sensitive complaint in Regulation Bureau (bureau 0)
     created = client.post(
@@ -26,7 +26,7 @@ def test_samanvay_abac_sensitive_masking(client):
 
     # Now login as officer in another bureau (bureau 1)
     # user[4] is in bureau 1 (regional)
-    regional_token = login(client, "regional@test.demo")
+    regional_token = login(client, "regional@samanvay.demo")
     detail = client.get(f"/api/complaints/{case_id}", headers=auth(regional_token))
     assert detail.status_code == 200
     res = detail.json()
@@ -39,7 +39,7 @@ def test_samanvay_abac_sensitive_masking(client):
 
 def test_samanvay_break_glass_protocol(client):
     """Test Break-Glass emergency override protocol with auditor alert."""
-    admin_token = login(client, "admin@test.demo")
+    admin_token = login(client, "admin@samanvay.demo")
     created = client.post(
         "/api/complaints",
         headers=auth(admin_token),
@@ -55,7 +55,7 @@ def test_samanvay_break_glass_protocol(client):
     case_id = created.json()["id"]
 
     # Officer triggers break glass
-    officer_token = login(client, "regional@test.demo")
+    officer_token = login(client, "regional@samanvay.demo")
     bg_resp = client.post(
         f"/api/complaints/{case_id}/break-glass",
         headers=auth(officer_token),
@@ -74,7 +74,7 @@ def test_samanvay_break_glass_protocol(client):
 
 def test_samanvay_action_intent_conflict_detection(client):
     """Test Action Intent card conflict warning between different bureaus."""
-    admin_token = login(client, "admin@test.demo")
+    admin_token = login(client, "admin@samanvay.demo")
 
     # Register an open case in Regulation Bureau
     c1 = client.post(
@@ -120,7 +120,7 @@ def test_samanvay_action_intent_conflict_detection(client):
 
 def test_samanvay_coordination_room_and_joint_decision(client):
     """Test coordination room lifecycle and joint decision written to both cases' timelines."""
-    admin_token = login(client, "admin@test.demo")
+    admin_token = login(client, "admin@samanvay.demo")
     c1 = client.post(
         "/api/complaints",
         headers=auth(admin_token),
@@ -176,7 +176,7 @@ def test_samanvay_coordination_room_and_joint_decision(client):
 
 def test_samanvay_pre_check_live_banner(client):
     """Test pre-save live banner check in <= 30 seconds."""
-    admin_token = login(client, "admin@test.demo")
+    admin_token = login(client, "admin@samanvay.demo")
     client.post(
         "/api/complaints",
         headers=auth(admin_token),
@@ -206,7 +206,7 @@ def test_samanvay_pre_check_live_banner(client):
 
 def test_samanvay_nl_search(client):
     """Test Natural Language search parsing."""
-    admin_token = login(client, "admin@test.demo")
+    admin_token = login(client, "admin@samanvay.demo")
     nl_res = client.get(
         "/api/complaints/nl-search",
         headers=auth(admin_token),
@@ -217,3 +217,144 @@ def test_samanvay_nl_search(client):
     assert "filters_applied" in data
     assert data["filters_applied"].get("category") == "Fee"
     assert data["filters_applied"].get("state") == "Maharashtra"
+
+
+def test_institution_eda_shape_and_insufficient_data(client):
+    """Test GET /api/institutions/{id}/eda shape and insufficient_data flag (< 5 complaints)."""
+    admin_token = login(client, "admin@samanvay.demo")
+
+    # 1. Create a brand new institution with 0 complaints
+    new_inst = client.post(
+        "/api/institutions",
+        headers=auth(admin_token),
+        json={
+            "institution_name": "Test Engineering Institute for EDA",
+            "aicte_permanent_id": "EDA-TEST-001",
+            "institution_type": "Engineering",
+            "state": "Maharashtra",
+            "region": "West",
+            "city": "Pune",
+        },
+    )
+    assert new_inst.status_code == 201
+    inst_id = new_inst.json()["id"]
+
+    # 2. Call EDA endpoint on empty institution
+    eda_resp = client.get(f"/api/institutions/{inst_id}/eda", headers=auth(admin_token))
+    assert eda_resp.status_code == 200
+    data = eda_resp.json()
+
+    # Verify response schema shape
+    assert "stats" in data
+    for key in ("total", "open", "overdue", "disposed", "active_overlaps", "avg_open_age_days"):
+        assert key in data["stats"], f"Missing {key} in stats"
+
+    assert "monthly" in data
+    assert isinstance(data["monthly"], list)
+    assert len(data["monthly"]) == 12
+    for m in data["monthly"]:
+        assert "month" in m and "received" in m and "disposed" in m
+
+    assert "by_category" in data and isinstance(data["by_category"], list)
+    assert "by_bureau" in data and isinstance(data["by_bureau"], list)
+    assert "by_status" in data and isinstance(data["by_status"], list)
+
+    assert "ageing" in data
+    for bucket in ("0-30", "31-60", "61-90", "90+"):
+        assert bucket in data["ageing"], f"Missing {bucket} in ageing"
+
+    assert "sla" in data
+    assert "within_sla_pct" in data["sla"]
+    assert "all_institutions_avg_pct" in data["sla"]
+
+    assert "peer" in data
+    assert "institution_count" in data["peer"]
+    assert "state_avg_count" in data["peer"]
+    assert "state_avg_risk" in data["peer"]
+
+    assert "insights" in data
+    assert isinstance(data["insights"], list)
+    assert len(data["insights"]) <= 4
+
+    # Verify insufficient_data flag is True when total < 5
+    assert data["stats"]["total"] == 0
+    assert data["insufficient_data"] is True
+
+    # 3. Add 5 complaints to cross the threshold
+    for i in range(5):
+        c_resp = client.post(
+            "/api/complaints",
+            headers=auth(admin_token),
+            json={
+                "institution_id": inst_id,
+                "category": "Infrastructure" if i % 2 == 0 else "Fee Structure",
+                "subject": f"EDA Test Case {i+1}",
+                "description": f"Detailed description for complaint number {i+1}.",
+                "assigned_bureau_id": helpers.SEED["bureaus"][0],
+                "priority": "Medium",
+            },
+        )
+        assert c_resp.status_code == 201
+
+    # 4. Verify insufficient_data is now False with 5 complaints
+    eda_resp_5 = client.get(f"/api/institutions/{inst_id}/eda", headers=auth(admin_token))
+    assert eda_resp_5.status_code == 200
+    data_5 = eda_resp_5.json()
+    assert data_5["stats"]["total"] == 5
+    assert data_5["insufficient_data"] is False
+    assert len(data_5["by_category"]) > 0
+
+
+def test_institution_eda_abac_and_no_pii_leakage(client):
+    """Test that EDA and complaints never leak complainant PII and respect ABAC for sensitive cases."""
+    admin_token = login(client, "admin@samanvay.demo")
+    regional_token = login(client, "regional@samanvay.demo")
+
+    # Create institution
+    inst_resp = client.post(
+        "/api/institutions",
+        headers=auth(admin_token),
+        json={
+            "institution_name": "ABAC Sensitive Security College",
+            "aicte_permanent_id": "SEC-TEST-999",
+            "state": "Delhi",
+            "region": "North",
+        },
+    )
+    inst_id = inst_resp.json()["id"]
+
+    # Create sensitive complaint with sensitive subject and confidential matter in Bureau 0
+    client.post(
+        "/api/complaints",
+        headers=auth(admin_token),
+        json={
+            "institution_id": inst_id,
+            "category": "Ragging & Student Safety",
+            "sensitivity": "Ragging",
+            "subject": "Extremely Confidential Whistleblower Allegation",
+            "description": "Complainant John Doe (ID: 998877) reported hazing in room 402.",
+            "assigned_bureau_id": helpers.SEED["bureaus"][0],
+        },
+    )
+
+    # 1. Fetch EDA endpoint as regional officer (Bureau 1 - non-holding bureau)
+    eda_resp = client.get(f"/api/institutions/{inst_id}/eda", headers=auth(regional_token))
+    assert eda_resp.status_code == 200
+    eda_json = eda_resp.text
+
+    # No PII leakage: no personal names, phone numbers, or pseudo IDs
+    assert "John Doe" not in eda_json
+    assert "998877" not in eda_json
+    assert "complainant_encrypted" not in eda_json
+    assert "complainant_pseudo_id" not in eda_json
+
+    # 2. Fetch institution complaints list as non-holding bureau officer
+    comp_list = client.get(f"/api/institutions/{inst_id}/complaints", headers=auth(regional_token))
+    assert comp_list.status_code == 200
+    items = comp_list.json()
+    assert len(items) == 1
+    # Subject should be masked under Need-to-Know ABAC
+    assert "Confidential Whistleblower Allegation" not in items[0]["subject"]
+    assert "Sensitive Matter" in items[0]["subject"]
+    assert items[0]["category"] == "Ragging & Student Safety"
+

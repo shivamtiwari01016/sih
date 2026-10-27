@@ -20,6 +20,11 @@ import sys
 import uuid
 from datetime import date, datetime, time, timedelta
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.join(BASE_DIR, "backend")
 if not os.path.isdir(BACKEND_DIR):
@@ -143,8 +148,12 @@ NAME_SUFFIXES = [
 def generate_institutions():
     """Build ~300 curated and generated institutions with coordinates, AICTE IDs, and aliases."""
     institutions = []
+    seen_names = set()
+    seen_norm_names = set()
 
     # 1. Planted Showcase College: "ABC Institute of Technology"
+    seen_names.add("ABC Institute of Technology")
+    seen_norm_names.add("abc institute of technology")
     institutions.append({
         "institution_name": "ABC Institute of Technology",
         "normalized_name": "abc institute of technology",
@@ -167,23 +176,28 @@ def generate_institutions():
 
     # 2. Add catalog items (156 institutions)
     for idx, item in enumerate(CATALOG):
-        # find matching city or pick one
+        name = item["institution_name"].strip()
+        norm = name.lower()
+        if name in seen_names or norm in seen_norm_names:
+            continue
+        seen_names.add(name)
+        seen_norm_names.add(norm)
+
         city_match = next((c for c in INDIAN_CITIES if c[0].lower() == (item.get("city") or "").lower()), None)
         if not city_match:
             city_match = random.choice(INDIAN_CITIES)
         
         aicte_id = f"1-{1000000000 + idx * 7919 % 899999999}"
-        norm = item["institution_name"].lower()
         aliases = []
         if "institute" in norm:
-            aliases.append(item["institution_name"].replace("Institute", "Inst."))
+            aliases.append(name.replace("Institute", "Inst."))
         if "engineering" in norm:
-            aliases.append(item["institution_name"].replace("Engineering", "Engg"))
+            aliases.append(name.replace("Engineering", "Engg"))
         if "technology" in norm:
-            aliases.append(item["institution_name"].replace("Technology", "Tech"))
+            aliases.append(name.replace("Technology", "Tech"))
         
         institutions.append({
-            "institution_name": item["institution_name"],
+            "institution_name": name,
             "normalized_name": norm,
             "aicte_permanent_id": aicte_id,
             "aliases": aliases,
@@ -202,16 +216,46 @@ def generate_institutions():
             "lng": city_match[4] + round(random.uniform(-0.06, 0.06), 4),
         })
 
-    # 3. Generate up to 300 institutions
+    # Ensure Institute of Chemical Technology is present
+    if not any(i["institution_name"] == "Institute of Chemical Technology" for i in institutions):
+        ict_name = "Institute of Chemical Technology"
+        seen_names.add(ict_name)
+        seen_norm_names.add(ict_name.lower())
+        institutions.append({
+            "institution_name": ict_name,
+            "normalized_name": ict_name.lower(),
+            "aicte_permanent_id": "1-1092837499",
+            "aliases": ["ICT Mumbai", "ICT", "इंस्टीट्यूट ऑफ केमिकल टेक्नोलॉजी"],
+            "institution_type": "Deemed University",
+            "address": "Nathalal Parekh Marg, Matunga, Mumbai 400019",
+            "city": "Mumbai",
+            "state": "Maharashtra",
+            "region": "West",
+            "district": "Mumbai City",
+            "website": "https://www.ictmumbai.edu.in",
+            "established_year": 1933,
+            "ownership": "Government",
+            "affiliation": "Deemed University (Autonomous)",
+            "institution_status": "Active",
+            "lat": 19.0222,
+            "lng": 72.8561,
+        })
+
+    # 3. Generate up to 305 unique institutions
     curr_id = 2000
     while len(institutions) < 305:
         city_info = random.choice(INDIAN_CITIES)
         prefix = random.choice(NAME_PREFIXES)
         suffix_full, suffix_abbr, suffix_hi = random.choice(NAME_SUFFIXES)
         name = f"{prefix} {suffix_full}"
-        # ensure unique
-        if any(i["institution_name"] == name for i in institutions):
+        suffix_count = 1
+        while name in seen_names or name.lower() in seen_norm_names:
             name = f"{prefix} {city_info[0]} {suffix_full}"
+            if name in seen_names or name.lower() in seen_norm_names:
+                suffix_count += 1
+                name = f"{prefix} Campus-{suffix_count} {suffix_full}"
+        seen_names.add(name)
+        seen_norm_names.add(name.lower())
         
         norm = name.lower()
         aicte_id = f"1-{3000000000 + curr_id * 31337 % 899999999}"
@@ -313,23 +357,22 @@ def seed_data():
         # Core pitch demo users
         users_list = [
             # Full Name, Email, Role, BureauCode, Region, MFA
-            ("R.K. Sharma", "sharma@aicte.gov.in", UserRole.RB_OFFICER, "REG", "North", False),
-            ("Sunita Verma", "verma@aicte.gov.in", UserRole.PGRC_OFFICER, "PGRC", "North", False),
-            ("Kirit Patel", "patel@aicte.gov.in", UserRole.REGIONAL_OFFICER, "RO", "West", False),
-            ("Dr. Ramesh Rao", "rao@aicte.gov.in", UserRole.SENIOR_MANAGEMENT, None, None, False),
-            ("System Admin", "admin@aicte.gov.in", UserRole.SUPER_ADMIN, None, None, False),
-            ("Chief Vigilance Auditor", "auditor@aicte.gov.in", UserRole.AUDITOR, None, None, False),
-            # Demo aliases for compatibility with earlier test suites
-            ("Admin Demo", "admin@test.demo", UserRole.SUPER_ADMIN, None, None, False),
-            ("Officer Demo", "officer@test.demo", UserRole.CASE_OFFICER, "REG", None, False),
-            ("Regional Demo", "regional@test.demo", UserRole.REGIONAL_OFFICER, "RO", "West", False),
-            ("PGRC Demo", "pgrc@test.demo", UserRole.PGRC_OFFICER, "PGRC", None, False),
-            ("Auditor Demo", "auditor@test.demo", UserRole.AUDITOR, None, None, False),
-            ("Mgmt Demo", "mgmt@test.demo", UserRole.SENIOR_MANAGEMENT, None, None, False),
-            ("Civil Admin", "admin@civicresolve.demo", UserRole.SUPER_ADMIN, None, None, False),
-            ("Officer 1", "officer1@civicresolve.demo", UserRole.CASE_OFFICER, "REG", None, False),
-            ("Regulation Admin", "regadmin@civicresolve.demo", UserRole.BUREAU_ADMIN, "REG", None, False),
-            ("PGRC Admin", "pgrcadmin@civicresolve.demo", UserRole.BUREAU_ADMIN, "PGRC", None, False),
+            ("R.K. Sharma", "sharma@samanvay.demo", UserRole.RB_OFFICER, "REG", "North", False),
+            ("Sunita Verma", "verma@samanvay.demo", UserRole.PGRC_OFFICER, "PGRC", "North", False),
+            ("Kirit Patel", "patel@samanvay.demo", UserRole.REGIONAL_OFFICER, "RO", "West", False),
+            ("Dr. Ramesh Rao", "rao@samanvay.demo", UserRole.SENIOR_MANAGEMENT, None, None, False),
+            ("System Admin", "admin@samanvay.demo", UserRole.SUPER_ADMIN, None, None, False),
+            ("Chief Vigilance Auditor", "auditor@samanvay.demo", UserRole.AUDITOR, None, None, False),
+            # Demo aliases
+            ("Officer Demo", "officer@samanvay.demo", UserRole.CASE_OFFICER, "REG", None, False),
+            ("Regional Demo", "regional@samanvay.demo", UserRole.REGIONAL_OFFICER, "RO", "West", False),
+            ("PGRC Demo", "pgrc@samanvay.demo", UserRole.PGRC_OFFICER, "PGRC", None, False),
+            ("Mgmt Demo", "management@samanvay.demo", UserRole.SENIOR_MANAGEMENT, None, None, False),
+            ("Officer 1", "officer1@samanvay.demo", UserRole.CASE_OFFICER, "REG", None, False),
+            ("Regulation Admin", "regadmin@samanvay.demo", UserRole.BUREAU_ADMIN, "REG", None, False),
+            ("PGRC Admin", "pgrcadmin@samanvay.demo", UserRole.BUREAU_ADMIN, "PGRC", None, False),
+            ("Bureau Admin", "bureauadmin@samanvay.demo", UserRole.BUREAU_ADMIN, "REG", None, False),
+            ("Samanvay Admin", "superadmin@samanvay.demo", UserRole.SUPER_ADMIN, None, None, False),
         ]
 
         # Additional officers to make 40 users across Indian regions
@@ -351,7 +394,7 @@ def seed_data():
         for name, region, bcode in officer_names:
             email_prefix = name.lower().replace(" ", ".")
             role = UserRole.REGIONAL_OFFICER if bcode == "RO" else (UserRole.RB_OFFICER if bcode == "REG" else UserRole.PGRC_OFFICER)
-            users_list.append((name, f"{email_prefix}@aicte.gov.in", role, bcode, region, False))
+            users_list.append((name, f"{email_prefix}@samanvay.demo", role, bcode, region, False))
 
         user_objects = {}
         for name, email, role, bcode, region, mfa in users_list:
@@ -405,8 +448,8 @@ def seed_data():
         abc_inst = inst_by_name["ABC Institute of Technology"]
 
         # Watchlist entry for demo
-        db.add(Watchlist(user_id=user_objects["sharma@aicte.gov.in"].id, institution_id=abc_inst.id))
-        db.add(Watchlist(user_id=user_objects["rao@aicte.gov.in"].id, institution_id=abc_inst.id))
+        db.add(Watchlist(user_id=user_objects["sharma@samanvay.demo"].id, institution_id=abc_inst.id))
+        db.add(Watchlist(user_id=user_objects["rao@samanvay.demo"].id, institution_id=abc_inst.id))
         db.commit()
 
         print("[6/8] Generating 650 Complaints with realistic SLA, encryption & planted overlaps...")
@@ -441,18 +484,49 @@ def seed_data():
             sensitivity=Sensitivity.NORMAL,
             current_status=ComplaintStatus.UNDER_PROCESS,
             assigned_bureau_id=bureaus["PGRC"].id,
-            assigned_officer_id=user_objects["verma@aicte.gov.in"].id,
-            expected_disposal_date=rec_14 + timedelta(days=30),
+            assigned_officer_id=user_objects["verma@samanvay.demo"].id,
+            expected_disposal_date=today + timedelta(days=16),
             last_action_at=datetime.combine(rec_14 + timedelta(days=7), time(14, 30)),
             next_action="Awaiting explanation from college principal; personal hearing proposed",
             complainant_pseudo_id=generate_pseudo_id(),
             complainant_encrypted=encrypt_data({"name": "Aarav Sharma & Batch", "mobile": "+91-9876543210"}),
             language="en",
-            created_by=user_objects["verma@aicte.gov.in"].id,
+            created_by=user_objects["verma@samanvay.demo"].id,
         )
         db.add(abc_pgrc_case)
         db.flush()
         complaints.append(abc_pgrc_case)
+
+        # PLANT SHOWCASE COMPLAINT 2: ABC Instt of Tech RB Approval Violation Case (different wording, name typo in one)
+        rec_20 = today - timedelta(days=20)
+        abc_rb_case = Complaint(
+            complaint_number=next_num("REG"),
+            institution_id=abc_inst.id,
+            received_date=rec_20,
+            source_channel="Vigilance Directorate",
+            category="Approval Norms",
+            subject="Approval Norm Violation & Unauthorized Intake Expansion at ABC Instt of Tech",
+            description=(
+                "Comprehensive inspection report indicates ABC Instt of Tech has exceeded its approved "
+                "sanctioned intake by 60 seats in Computer Science and operates unauthorized laboratories "
+                "in violation of Approval Process Handbook Chapter 4 norms."
+            ),
+            summary="Regulatory inspection: ABC Instt of Tech running unapproved PG programs and violating intake quotas.",
+            priority=Priority.HIGH,
+            sensitivity=Sensitivity.NORMAL,
+            current_status=ComplaintStatus.UNDER_PROCESS,
+            assigned_bureau_id=bureaus["REG"].id,
+            assigned_officer_id=user_objects["sharma@samanvay.demo"].id,
+            expected_disposal_date=today + timedelta(days=10),
+            last_action_at=datetime.combine(rec_20 + timedelta(days=10), time(11, 0)),
+            next_action="Scrutiny of physical verification documents and show-cause notice",
+            complainant_pseudo_id=generate_pseudo_id(),
+            language="en",
+            created_by=user_objects["sharma@samanvay.demo"].id,
+        )
+        db.add(abc_rb_case)
+        db.flush()
+        complaints.append(abc_rb_case)
 
         # PLANTED OVERLAP 1: Exact AICTE ID Match (RB side for another college)
         coll_exact = institutions[5]
@@ -469,11 +543,11 @@ def seed_data():
             sensitivity=Sensitivity.NORMAL,
             current_status=ComplaintStatus.UNDER_PROCESS,
             assigned_bureau_id=bureaus["REG"].id,
-            assigned_officer_id=user_objects["sharma@aicte.gov.in"].id,
+            assigned_officer_id=user_objects["sharma@samanvay.demo"].id,
             expected_disposal_date=today + timedelta(days=5),
             next_action="Issue Show Cause Notice",
             complainant_pseudo_id=generate_pseudo_id(),
-            created_by=user_objects["sharma@aicte.gov.in"].id,
+            created_by=user_objects["sharma@samanvay.demo"].id,
         )
         c_exact_pgrc = Complaint(
             complaint_number=next_num("PGRC"),
@@ -488,11 +562,11 @@ def seed_data():
             sensitivity=Sensitivity.NORMAL,
             current_status=ComplaintStatus.RECEIVED,
             assigned_bureau_id=bureaus["PGRC"].id,
-            assigned_officer_id=user_objects["verma@aicte.gov.in"].id,
+            assigned_officer_id=user_objects["verma@samanvay.demo"].id,
             expected_disposal_date=today + timedelta(days=10),
             next_action="Scrutiny of complaint documents",
             complainant_pseudo_id=generate_pseudo_id(),
-            created_by=user_objects["verma@aicte.gov.in"].id,
+            created_by=user_objects["verma@samanvay.demo"].id,
         )
         db.add_all([c_exact_rb, c_exact_pgrc])
         db.flush()
@@ -514,10 +588,10 @@ def seed_data():
             sensitivity=Sensitivity.NORMAL,
             current_status=ComplaintStatus.UNDER_PROCESS,
             assigned_bureau_id=bureaus["REG"].id,
-            assigned_officer_id=user_objects["sharma@aicte.gov.in"].id,
+            assigned_officer_id=user_objects["sharma@samanvay.demo"].id,
             expected_disposal_date=today + timedelta(days=15),
             complainant_pseudo_id=generate_pseudo_id(),
-            created_by=user_objects["sharma@aicte.gov.in"].id,
+            created_by=user_objects["sharma@samanvay.demo"].id,
         )
         c_fuz_2 = Complaint(
             complaint_number=next_num("PGRC"),
@@ -532,10 +606,10 @@ def seed_data():
             sensitivity=Sensitivity.NORMAL,
             current_status=ComplaintStatus.RECEIVED,
             assigned_bureau_id=bureaus["PGRC"].id,
-            assigned_officer_id=user_objects["verma@aicte.gov.in"].id,
+            assigned_officer_id=user_objects["verma@samanvay.demo"].id,
             expected_disposal_date=today + timedelta(days=12),
             complainant_pseudo_id=generate_pseudo_id(),
-            created_by=user_objects["verma@aicte.gov.in"].id,
+            created_by=user_objects["verma@samanvay.demo"].id,
         )
         db.add_all([c_fuz_1, c_fuz_2])
         db.flush()
@@ -556,11 +630,11 @@ def seed_data():
             sensitivity=Sensitivity.NORMAL,
             current_status=ComplaintStatus.RECEIVED,
             assigned_bureau_id=bureaus["REG"].id,
-            assigned_officer_id=user_objects["sharma@aicte.gov.in"].id,
+            assigned_officer_id=user_objects["sharma@samanvay.demo"].id,
             expected_disposal_date=today + timedelta(days=15),
             language="en",
             complainant_pseudo_id=generate_pseudo_id(),
-            created_by=user_objects["sharma@aicte.gov.in"].id,
+            created_by=user_objects["sharma@samanvay.demo"].id,
         )
         c_sem_hi = Complaint(
             complaint_number=next_num("PGRC"),
@@ -575,35 +649,35 @@ def seed_data():
             sensitivity=Sensitivity.NORMAL,
             current_status=ComplaintStatus.UNDER_PROCESS,
             assigned_bureau_id=bureaus["PGRC"].id,
-            assigned_officer_id=user_objects["verma@aicte.gov.in"].id,
+            assigned_officer_id=user_objects["verma@samanvay.demo"].id,
             expected_disposal_date=today + timedelta(days=18),
             language="hi",
             complainant_pseudo_id=generate_pseudo_id(),
-            created_by=user_objects["verma@aicte.gov.in"].id,
+            created_by=user_objects["verma@samanvay.demo"].id,
         )
         db.add_all([c_sem_en, c_sem_hi])
         db.flush()
         complaints.extend([c_sem_en, c_sem_hi])
 
-        # PLANTED OVERLAP 4: Cross-Bureau Conflict (RB Notice vs PGRC Closure)
-        coll_conflict = institutions[25]
+        # PLANTED OVERLAP 4: Cross-Bureau Conflict for Institute of Chemical Technology
+        coll_conflict = inst_by_name.get("Institute of Chemical Technology", institutions[25])
         c_conf_rb = Complaint(
             complaint_number=next_num("REG"),
             institution_id=coll_conflict.id,
             received_date=today - timedelta(days=40),
             source_channel="Vigilance",
             category="Admission",
-            subject="Irregular Admission Intake Exceeding Approved AICTE Seats",
-            description="Admitted 30 extra students in Computer Science beyond sanctioned 120 intake capacity.",
-            summary="Over-admission beyond AICTE approved intake.",
+            subject="Irregular Admission Intake Exceeding Approved AICTE Seats at Institute of Chemical Technology",
+            description="Admitted 30 extra students in chemical engineering technology beyond sanctioned intake capacity.",
+            summary="Over-admission beyond AICTE approved intake at Institute of Chemical Technology.",
             priority=Priority.HIGH,
             sensitivity=Sensitivity.NORMAL,
             current_status=ComplaintStatus.UNDER_PROCESS,
             assigned_bureau_id=bureaus["REG"].id,
-            assigned_officer_id=user_objects["sharma@aicte.gov.in"].id,
+            assigned_officer_id=user_objects["sharma@samanvay.demo"].id,
             expected_disposal_date=today + timedelta(days=5),
             complainant_pseudo_id=generate_pseudo_id(),
-            created_by=user_objects["sharma@aicte.gov.in"].id,
+            created_by=user_objects["sharma@samanvay.demo"].id,
         )
         c_conf_pgrc = Complaint(
             complaint_number=next_num("PGRC"),
@@ -611,17 +685,17 @@ def seed_data():
             received_date=today - timedelta(days=35),
             source_channel="Parent Forum",
             category="Admission",
-            subject="Refusal of Admission Cancellation and Non-Refund of Tuition Fee",
+            subject="Refusal of Admission Cancellation and Non-Refund of Tuition Fee at Institute of Chemical Technology",
             description="College refused to refund ₹1,20,000 fee after student withdrew admission within cutoff date.",
-            summary="Non-refund of fee on timely withdrawal of admission.",
+            summary="Non-refund of fee on timely withdrawal of admission at Institute of Chemical Technology.",
             priority=Priority.MEDIUM,
             sensitivity=Sensitivity.NORMAL,
             current_status=ComplaintStatus.UNDER_PROCESS,
             assigned_bureau_id=bureaus["PGRC"].id,
-            assigned_officer_id=user_objects["verma@aicte.gov.in"].id,
+            assigned_officer_id=user_objects["verma@samanvay.demo"].id,
             expected_disposal_date=today + timedelta(days=10),
             complainant_pseudo_id=generate_pseudo_id(),
-            created_by=user_objects["verma@aicte.gov.in"].id,
+            created_by=user_objects["verma@samanvay.demo"].id,
         )
         db.add_all([c_conf_rb, c_conf_pgrc])
         db.flush()
@@ -642,11 +716,11 @@ def seed_data():
             sensitivity=Sensitivity.RAGGING,
             current_status=ComplaintStatus.UNDER_PROCESS,
             assigned_bureau_id=bureaus["PGRC"].id,
-            assigned_officer_id=user_objects["verma@aicte.gov.in"].id,
+            assigned_officer_id=user_objects["verma@samanvay.demo"].id,
             expected_disposal_date=today + timedelta(days=3),
             complainant_pseudo_id=generate_pseudo_id(),
             complainant_encrypted=encrypt_data({"victim": "Confidential Student Y", "contact": "+91-9988776655"}),
-            created_by=user_objects["verma@aicte.gov.in"].id,
+            created_by=user_objects["verma@samanvay.demo"].id,
         )
         c_whistleblower = Complaint(
             complaint_number=next_num("REG"),
@@ -661,11 +735,11 @@ def seed_data():
             sensitivity=Sensitivity.WHISTLEBLOWER,
             current_status=ComplaintStatus.UNDER_PROCESS,
             assigned_bureau_id=bureaus["REG"].id,
-            assigned_officer_id=user_objects["sharma@aicte.gov.in"].id,
+            assigned_officer_id=user_objects["sharma@samanvay.demo"].id,
             expected_disposal_date=today + timedelta(days=7),
             complainant_pseudo_id=generate_pseudo_id(),
             complainant_encrypted=encrypt_data({"identity": "Protected Whistleblower X", "source": "Central Vigilance Commission"}),
-            created_by=user_objects["sharma@aicte.gov.in"].id,
+            created_by=user_objects["sharma@samanvay.demo"].id,
         )
         db.add_all([c_ragging, c_whistleblower])
         db.flush()
@@ -687,10 +761,10 @@ def seed_data():
                 sensitivity=Sensitivity.NORMAL,
                 current_status=ComplaintStatus.RECEIVED,
                 assigned_bureau_id=bureaus["PGRC"].id,
-                assigned_officer_id=user_objects["verma@aicte.gov.in"].id,
+                assigned_officer_id=user_objects["verma@samanvay.demo"].id,
                 expected_disposal_date=today + timedelta(days=28),
                 complainant_pseudo_id=generate_pseudo_id(),
-                created_by=user_objects["verma@aicte.gov.in"].id,
+                created_by=user_objects["verma@samanvay.demo"].id,
             )
             db.add(c_ring)
             db.flush()
@@ -717,7 +791,7 @@ def seed_data():
         for st, wt in status_weights:
             status_pool.extend([st] * int(wt * 100))
 
-        officer_keys = [k for k in user_objects.keys() if "aicte.gov.in" in k and "admin" not in k and "auditor" not in k]
+        officer_keys = [k for k in user_objects.keys() if "samanvay.demo" in k and "admin" not in k and "auditor" not in k]
 
         for _ in range(630):
             inst = random.choice(institutions)
@@ -725,7 +799,15 @@ def seed_data():
             status = random.choice(status_pool)
             days_ago = random.randint(1, 175)
             rec_date = today - timedelta(days=days_ago)
-            exp_disp = rec_date + timedelta(days=days_disp)
+
+            # Make due dates relative to today so ~20% of open cases are overdue
+            if status != ComplaintStatus.DISPOSED:
+                if random.random() < 0.20:
+                    exp_disp = today - timedelta(days=random.randint(1, 25))
+                else:
+                    exp_disp = today + timedelta(days=random.randint(2, days_disp))
+            else:
+                exp_disp = rec_date + timedelta(days=days_disp)
 
             b_key = random.choice(["REG", "PGRC", "RO", "APB"])
             bureau = bureaus[b_key]
@@ -776,10 +858,11 @@ def seed_data():
 
         print("[7/8] Establishing Planted Overlaps, Coordination Rooms & Intent Cards...")
         planted_pairs = [
+            (abc_pgrc_case, abc_rb_case, 0.95, ["Matching institution: ABC Institute of Technology vs ABC Instt of Tech (name typo match)", "Cross-bureau inquiry: PGRC fee extortion vs RB approval violation", "High jurisdictional overlap"], RelationshipType.CROSS_BUREAU_COORDINATION, ReviewStatus.SUGGESTED),
             (c_exact_rb, c_exact_pgrc, 0.96, ["Same verified AICTE ID", "Both cases active", "Different holding bureaus"], RelationshipType.CROSS_BUREAU_COORDINATION, ReviewStatus.CONFIRMED_RELATED),
             (c_fuz_1, c_fuz_2, 0.88, ["Fuzzy institutional name match (>85%)", "Same complaint category: Faculty Related", "Cross-bureau jurisdiction"], RelationshipType.CROSS_BUREAU_COORDINATION, ReviewStatus.SUGGESTED),
             (c_sem_en, c_sem_hi, 0.91, ["Bilingual semantic alignment: Capitation fee overcharge", "Same verified institution", "Cross-bureau overlap"], RelationshipType.CROSS_BUREAU_COORDINATION, ReviewStatus.CONFIRMED_RELATED),
-            (c_conf_rb, c_conf_pgrc, 0.94, ["Same institution", "Admission irregular seats vs fee refund conflict", "Conflicting regulatory intents"], RelationshipType.CROSS_BUREAU_COORDINATION, ReviewStatus.CONFIRMED_RELATED),
+            (c_conf_rb, c_conf_pgrc, 0.94, ["Institute of Chemical Technology", "Admission irregular seats vs lab fee refund conflict", "Conflicting regulatory intents"], RelationshipType.CROSS_BUREAU_COORDINATION, ReviewStatus.CONFIRMED_RELATED),
         ]
 
         # Additional synthetic overlaps
@@ -802,37 +885,40 @@ def seed_data():
             # Seed coordination room messages
             db.add(CoordinationMessage(
                 related_case_id=rc.id,
-                officer_id=user_objects["sharma@aicte.gov.in"].id,
+                officer_id=user_objects["sharma@samanvay.demo"].id,
                 body="Identified overlapping regulatory inquiry on this college. Regulation Bureau proposing lead under approval violation mandate.",
                 mentions=json.dumps(["Sunita Verma"]),
             ))
             db.add(CoordinationMessage(
                 related_case_id=rc.id,
-                officer_id=user_objects["verma@aicte.gov.in"].id,
+                officer_id=user_objects["verma@samanvay.demo"].id,
                 body="Agreed. PGRC concurs with Regulation Bureau lead. We will coordinate joint show-cause hearings.",
                 mentions=json.dumps(["R.K. Sharma"]),
             ))
 
-        # Add Action Intent for the conflict pair
+        # Add Action Intent for the conflict pair (Institute of Chemical Technology hearing 8 Nov vs inspection 9 Nov)
+        hearing_date = date(today.year, 11, 8)
+        inspection_date = date(today.year, 11, 9)
+
         db.add(ActionIntent(
             complaint_id=c_conf_pgrc.id,
             institution_id=coll_conflict.id,
-            officer_id=user_objects["verma@aicte.gov.in"].id,
+            officer_id=user_objects["verma@samanvay.demo"].id,
             bureau_id=bureaus["PGRC"].id,
             intent_type=IntentType.HEARING,
-            planned_date=today + timedelta(days=12),
+            planned_date=hearing_date,
             status=IntentStatus.PROPOSED,
-            conflicts_json=json.dumps(["Regulation Bureau has active show cause enquiry targeting institution."]),
+            conflicts_json=json.dumps([f"Regulation Bureau surprise inspection scheduled for {inspection_date.strftime('%d %b')}; potential conflicting college directives."]),
         ))
         db.add(ActionIntent(
             complaint_id=c_conf_rb.id,
             institution_id=coll_conflict.id,
-            officer_id=user_objects["sharma@aicte.gov.in"].id,
+            officer_id=user_objects["sharma@samanvay.demo"].id,
             bureau_id=bureaus["REG"].id,
             intent_type=IntentType.INSPECTION,
-            planned_date=today + timedelta(days=13),
+            planned_date=inspection_date,
             status=IntentStatus.PROPOSED,
-            conflicts_json=json.dumps(["PGRC hearing scheduled 1 day prior; potential prejudice to proceedings."]),
+            conflicts_json=json.dumps([f"PGRC personal hearing scheduled for {hearing_date.strftime('%d %b')} (1 day prior); uncoordinated inspection risks prejudice to proceedings."]),
         ))
 
         # Add 30 additional related cases to reach 35+ total
@@ -928,7 +1014,7 @@ def seed_data():
         print("=" * 70)
         print("SEEDING COMPLETE!")
         print(f"Bureaus: {len(bureaus)}")
-        print(f"Users: {len(user_objects)} (Key users: sharma@aicte.gov.in, verma@aicte.gov.in, patel@aicte.gov.in, rao@aicte.gov.in, auditor@aicte.gov.in)")
+        print(f"Users: {len(user_objects)} (Key users: sharma@samanvay.demo, verma@samanvay.demo, patel@samanvay.demo, rao@samanvay.demo, auditor@samanvay.demo)")
         print(f"Institutions: {len(institutions)} (Showcase: ABC Institute of Technology, AICTE ID: 1-1092837465)")
         print(f"Complaints: {len(complaints)}")
         print(f"Audit Logs: 2,150 records, Chain Verified: {audit_check['verified']}")
